@@ -1,0 +1,36 @@
+# 由 --config 指定其他 TOML 文件可覆盖整套配置。
+host = "127.0.0.1"
+public_host = "localhost"
+http_timeout_seconds = 5
+shutdown_timeout_seconds = 10
+process_poll_seconds = 0.2
+log_level = "info"
+
+[tls]
+certificate = ".var/tls/server.pem"
+private_key = ".var/tls/server-key.pem"
+ca_certificate = ".var/tls/ca.pem"
+ca_private_key = ".var/tls/ca-key.pem"
+valid_days = 365
+
+[oauth]
+code_lifetime_seconds = 120
+consent_lifetime_seconds = 600
+access_lifetime_seconds = 300
+refresh_lifetime_seconds = 3600
+scopes = ["mcp:tools"]
+redirect_uris = ["https://localhost:5179/connectors/oauth/callback", "https://127.0.0.1:5179/connectors/oauth/callback"]
+
+[[instances]]
+name = "reports"
+display_name = "Mock 报表服务"
+description = "模拟企业报表系统，查询销售月报和成本月报的月份、金额与币种。"
+oauth_port = 38101
+mcp_port = 38102
+
+[[instances]]
+name = "directory"
+display_name = "Mock 通讯录服务"
+description = "模拟企业通讯录，按姓名或部门查询员工及邮箱。"
+oauth_port = 38103
+mcp_port = 38104
