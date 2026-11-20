@@ -1,4 +1,4 @@
-"""模拟公司登录和 JWKS，独立签发开发环境 JWT。"""
+"""模拟公司登录、JWKS 和知识库检索。"""
 
 import json
 import time
@@ -6,8 +6,12 @@ from uuid import uuid4
 
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
+
+from ._knowledgebase import KnowledgeQueryRequest, stream_knowledge_query
 
 ISSUER = "urn:egis:agentkit:mock"
 AUDIENCE = "egis-agentkit"
@@ -33,10 +37,30 @@ class LoginResponse(BaseModel):
 def create_app() -> FastAPI:
     app = FastAPI(title="Egis AgentKit Mock")
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_key = json.loads(
-        jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key())
-    )
+    verification_key = private_key.public_key()
+    public_key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(verification_key))
     public_key.update(kid=uuid4().hex, use="sig", alg=JWT_ALGORITHM)
+    bearer = HTTPBearer(auto_error=False)
+
+    def require_mock_jwt(
+        credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    ) -> None:
+        unauthorized = HTTPException(
+            401, "知识库检索需要有效的 Mock JWT", headers={"WWW-Authenticate": "Bearer"}
+        )
+        if credentials is None:
+            raise unauthorized
+        try:
+            jwt.decode(
+                credentials.credentials,
+                verification_key,
+                algorithms=[JWT_ALGORITHM],
+                issuer=ISSUER,
+                audience=AUDIENCE,
+                options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+            )
+        except jwt.InvalidTokenError as exc:
+            raise unauthorized from exc
 
     @app.get("/health")
     def health():
@@ -68,5 +92,17 @@ def create_app() -> FastAPI:
             headers={"kid": public_key["kid"]},
         )
         return LoginResponse(access_token=token)
+
+    @app.post(
+        "/knowledge/query",
+        dependencies=[Depends(require_mock_jwt)],
+        response_class=StreamingResponse,
+    )
+    async def knowledge_query(body: KnowledgeQueryRequest) -> StreamingResponse:
+        return StreamingResponse(
+            stream_knowledge_query(body),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store"},
+        )
 
     return app

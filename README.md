@@ -1,6 +1,6 @@
 # egis-agentkit-mock
 
-独立的 FastAPI 开发认证服务。允许 `luyang`、`mask`、`trump`、`sam` 登录，密码统一为 `123`，账号区分大小写。其他账号或错误密码返回 HTTP 401。请绑定开发机的回环地址。
+独立的 FastAPI 开发认证和知识库检索服务。允许 `luyang`、`mask`、`trump`、`sam` 登录，密码统一为 `123`，账号区分大小写。其他账号或错误密码返回 HTTP 401。请绑定开发机的回环地址。
 
 ```sh
 uv sync --locked
@@ -37,6 +37,30 @@ curl -fsS http://127.0.0.1:38092/manager/me \
 ```
 
 Mock 每次启动生成新签名密钥，重启后请重新登录。运行 `uv run pytest` 验证登录和验签。
+
+## 知识库检索 Mock
+
+将以下字段合并到开发环境的 Nacos `agentkit.yaml`，然后递增 `agentkit.revision`。如果已设置 `agentkit.tool.defaults.registeredIds`，在列表里加上 `KnowledgeBaseSearch`。
+
+```yaml
+agentkit:
+  tool:
+    knowledgeBase:
+      queryUrl: http://127.0.0.1:38093/knowledge/query
+      timeoutSeconds: 1800
+```
+
+使用上面登录得到的 `AGENTKIT_MOCK_TOKEN` 可查看原始 SSE。
+
+```sh
+curl -fsS -N http://127.0.0.1:38093/knowledge/query \
+  -H "Authorization: Bearer ${AGENTKIT_MOCK_TOKEN}" \
+  -H 'Accept: text/event-stream' \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"企业年金缴费要核对哪些材料？","topK":5,"threshold":0.5}'
+```
+
+接口先发文档和 Wiki 检索的 `stage`，再各发一条带答案和引用的 `result`，最后发 `done`。内容为固定演示数据。可在聊天里发送「用知识库查一下企业年金缴费要核对哪些材料，列出参考来源」。
 
 ## MCP 与 OAuth Mock
 
